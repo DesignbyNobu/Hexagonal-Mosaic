@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geometric Mosaic Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #f1f5f9;
+        }
+        canvas {
+            max-width: 100%;
+            height: auto;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            background-color: #1e293b;
+        }
+        .controls-panel {
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(10px);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-4 md:p-8">
+    
+    <div class="max-w-6xl w-full flex flex-col gap-6">
+        <header class="text-center mb-4">
+            <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
+                Geometric Mosaic Generator
+            </h1>
+            <p class="text-slate-400 mt-2">Ubah foto menjadi mozaik vektor heksagon atau segitiga secara instan</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <!-- Sidebar Controls -->
+            <div class="lg:col-span-1 flex flex-col gap-4 controls-panel p-6 rounded-2xl border border-slate-700">
+                <div>
+                    <label class="block text-sm font-medium mb-2">1. Pilih Gambar</label>
+                    <input type="file" id="imageInput" accept="image/*" class="block w-full text-sm text-slate-400
+                        file:mr-4 file:py-2 file:px-4
+                        file:rounded-full file:border-0
+                        file:text-sm file:font-semibold
+                        file:bg-blue-500 file:text-white
+                        hover:file:bg-blue-600 cursor-pointer">
+                </div>
+
+                <hr class="border-slate-700 my-2">
+
+                <div>
+                    <label class="block text-sm font-medium mb-2">2. Tipe Mozaik</label>
+                    <select id="shapeType" class="w-full bg-slate-800 border border-slate-600 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="hexagon">Heksagon (Segi Enam)</option>
+                        <option value="triangle">Segitiga (Triangle Grid)</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium mb-2" id="sizeLabel">3. Ukuran Sel: 15px</label>
+                    <input type="range" id="sizeRange" min="5" max="100" value="15" 
+                        class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium mb-2">4. Spasi (Padding)</label>
+                    <input type="range" id="paddingRange" min="0" max="10" step="0.5" value="1" 
+                        class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500">
+                </div>
+
+                <div class="mt-4 flex flex-col gap-2">
+                    <button id="downloadSvg" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
+                        <span>Unduh SVG (Vektor)</span>
+                    </button>
+                    <button id="downloadPng" class="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors">
+                        Simpan PNG
+                    </button>
+                </div>
+            </div>
+
+            <!-- Main Preview -->
+            <div class="lg:col-span-3 flex flex-col items-center justify-center bg-slate-900 rounded-2xl p-4 border border-slate-700 overflow-hidden min-h-[500px]">
+                <div id="placeholderText" class="text-slate-500 text-center">
+                    <svg class="w-16 h-16 mx-auto mb-4 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.587-1.587a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                    </svg>
+                    Pilih gambar untuk memulai
+                </div>
+                <canvas id="mainCanvas" class="hidden"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const imageInput = document.getElementById('imageInput');
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const sizeRange = document.getElementById('sizeRange');
+        const sizeLabel = document.getElementById('sizeLabel');
+        const paddingRange = document.getElementById('paddingRange');
+        const shapeType = document.getElementById('shapeType');
+        const downloadSvg = document.getElementById('downloadSvg');
+        const downloadPng = document.getElementById('downloadPng');
+        const placeholderText = document.getElementById('placeholderText');
+
+        let originalImage = null;
+
+        imageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                originalImage = new Image();
+                originalImage.onload = () => {
+                    placeholderText.classList.add('hidden');
+                    canvas.classList.remove('hidden');
+                    render();
+                };
+                originalImage.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        [sizeRange, paddingRange, shapeType].forEach(el => el.addEventListener('input', () => {
+            if (originalImage) {
+                sizeLabel.innerText = `3. Ukuran Sel: ${sizeRange.value}px`;
+                render();
+            }
+        }));
+
+        function getPixelColor(data, x, y, width, height) {
+            const sx = Math.min(Math.max(Math.floor(x), 0), width - 1);
+            const sy = Math.min(Math.max(Math.floor(y), 0), height - 1);
+            const idx = (sy * width + sx) * 4;
+            return `rgb(${data[idx]}, ${data[idx+1]}, ${data[idx+2]})`;
+        }
+
+        function render() {
+            if (!originalImage) return;
+
+            const radius = parseInt(sizeRange.value);
+            const padding = parseFloat(paddingRange.value);
+            const type = shapeType.value;
+
+            canvas.width = originalImage.width;
+            canvas.height = originalImage.height;
+
+            const offscreen = document.createElement('canvas');
+            const offCtx = offscreen.getContext('2d');
+            offscreen.width = canvas.width;
+            offscreen.height = canvas.height;
+            offCtx.drawImage(originalImage, 0, 0);
+            const imgData = offCtx.getImageData(0, 0, canvas.width, canvas.height).data;
+
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (type === 'hexagon') {
+                const hexWidth = radius * Math.sqrt(3);
+                const hexHeight = radius * 2;
+                const vertDist = hexHeight * 0.75;
+                const horizDist = hexWidth;
+                const rows = Math.ceil(canvas.height / vertDist) + 1;
+                const cols = Math.ceil(canvas.width / horizDist) + 1;
+
+                for (let r = 0; r < rows; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        const xOffset = (r % 2 === 0) ? 0 : horizDist / 2;
+                        const x = c * horizDist + xOffset;
+                        const y = r * vertDist;
+                        const color = getPixelColor(imgData, x, y, canvas.width, canvas.height);
+                        drawHexagon(ctx, x, y, radius - padding, color);
+                    }
+                }
+            } else {
+                // Triangle Grid Logic
+                // Heksagon dibagi menjadi 6 segitiga. Tinggi segitiga = radius * 1.5 / 2? 
+                // Pendekatan lebih simpel: Grid segitiga sama sisi
+                const h = radius * Math.sqrt(3); // tinggi segitiga
+                const w = radius * 2;           // alas segitiga
+                
+                const rows = Math.ceil(canvas.height / (h)) + 2;
+                const cols = Math.ceil(canvas.width / (radius)) + 2;
+
+                for (let r = 0; r < rows; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        const x = c * radius;
+                        const y = r * h;
+                        
+                        // Setiap sel grid memiliki dua segitiga (atas dan bawah)
+                        // Segitiga 1 (Pointing up or down depending on position)
+                        const isEvenCol = c % 2 === 0;
+                        const isEvenRow = r % 2 === 0;
+                        
+                        // Logika untuk membentuk pola mozaik segitiga yang rapat
+                        // Triangle A
+                        let pointsA = [];
+                        let centerX, centerY;
+
+                        if ((isEvenRow && isEvenCol) || (!isEvenRow && !isEvenCol)) {
+                            // Pointing Up
+                            pointsA = [
+                                [x, y + h], [x + radius, y], [x + radius * 2, y + h]
+                            ];
+                            centerX = x + radius;
+                            centerY = y + h * 0.66;
+                        } else {
+                            // Pointing Down
+                            pointsA = [
+                                [x, y], [x + radius * 2, y], [x + radius, y + h]
+                            ];
+                            centerX = x + radius;
+                            centerY = y + h * 0.33;
+                        }
+
+                        const color = getPixelColor(imgData, centerX, centerY, canvas.width, canvas.height);
+                        drawPolygon(ctx, pointsA, color, padding);
+                    }
+                }
+            }
+        }
+
+        function drawHexagon(context, x, y, r, color) {
+            context.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const angle = (Math.PI / 3) * i - (Math.PI / 6);
+                context.lineTo(x + r * Math.cos(angle), y + r * Math.sin(angle));
+            }
+            context.closePath();
+            context.fillStyle = color;
+            context.fill();
+        }
+
+        function drawPolygon(context, points, color, padding) {
+            if (padding > 0) {
+                // Sederhana: ciutkan titik ke arah pusat gravitasi segitiga
+                const cx = (points[0][0] + points[1][0] + points[2][0]) / 3;
+                const cy = (points[0][1] + points[1][1] + points[2][1]) / 3;
+                points = points.map(p => {
+                    const dx = p[0] - cx;
+                    const dy = p[1] - cy;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    const ratio = Math.max(0, dist - padding) / dist;
+                    return [cx + dx * ratio, cy + dy * ratio];
+                });
+            }
+
+            context.beginPath();
+            context.moveTo(points[0][0], points[0][1]);
+            for (let i = 1; i < points.length; i++) {
+                context.lineTo(points[i][0], points[i][1]);
+            }
+            context.closePath();
+            context.fillStyle = color;
+            context.fill();
+        }
+
+        downloadSvg.onclick = () => {
+            if (!originalImage) return;
+            const radius = parseInt(sizeRange.value);
+            const padding = parseFloat(paddingRange.value);
+            const type = shapeType.value;
+
+            const w = originalImage.width;
+            const h = originalImage.height;
+            
+            const offscreen = document.createElement('canvas');
+            offscreen.width = w; offscreen.height = h;
+            const offCtx = offscreen.getContext('2d');
+            offCtx.drawImage(originalImage, 0, 0);
+            const imgData = offCtx.getImageData(0, 0, w, h).data;
+
+            let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">`;
+            svg += `<rect width="100%" height="100%" fill="#0f172a"/>`;
+
+            if (type === 'hexagon') {
+                const hexWidth = radius * Math.sqrt(3);
+                const hexHeight = radius * 2;
+                const vertDist = hexHeight * 0.75;
+                const horizDist = hexWidth;
+                for (let r = 0; r < Math.ceil(h / vertDist) + 1; r++) {
+                    for (let c = 0; c < Math.ceil(w / horizDist) + 1; c++) {
+                        const xOffset = (r % 2 === 0) ? 0 : horizDist / 2;
+                        const x = c * horizDist + xOffset;
+                        const y = r * vertDist;
+                        const color = getPixelColor(imgData, x, y, w, h);
+                        let pts = "";
+                        const rInner = radius - padding;
+                        for (let i = 0; i < 6; i++) {
+                            const angle = (Math.PI / 3) * i - (Math.PI / 6);
+                            pts += `${(x + rInner * Math.cos(angle)).toFixed(2)},${(y + rInner * Math.sin(angle)).toFixed(2)} `;
+                        }
+                        svg += `<polygon points="${pts}" fill="${color}" />`;
+                    }
+                }
+            } else {
+                const triH = radius * Math.sqrt(3);
+                for (let r = 0; r < Math.ceil(h / triH) + 2; r++) {
+                    for (let c = 0; c < Math.ceil(w / radius) + 2; c++) {
+                        const x = c * radius;
+                        const y = r * triH;
+                        let pts = [];
+                        let cx, cy;
+                        if ((r % 2 === 0 && c % 2 === 0) || (r % 2 !== 0 && c % 2 !== 0)) {
+                            pts = [[x, y + triH], [x + radius, y], [x + radius * 2, y + triH]];
+                            cx = x + radius; cy = y + triH * 0.66;
+                        } else {
+                            pts = [[x, y], [x + radius * 2, y], [x + radius, y + triH]];
+                            cx = x + radius; cy = y + triH * 0.33;
+                        }
+                        const color = getPixelColor(imgData, cx, cy, w, h);
+                        if (padding > 0) {
+                            pts = pts.map(p => {
+                                const dx = p[0] - cx; const dy = p[1] - cy;
+                                const dist = Math.sqrt(dx*dx + dy*dy);
+                                const ratio = Math.max(0, dist - padding) / dist;
+                                return [cx + dx * ratio, cy + dy * ratio];
+                            });
+                        }
+                        const ptsStr = pts.map(p => p[0].toFixed(2) + ',' + p[1].toFixed(2)).join(' ');
+                        svg += `<polygon points="${ptsStr}" fill="${color}" />`;
+                    }
+                }
+            }
+            svg += `</svg>`;
+            const blob = new Blob([svg], {type: 'image/svg+xml'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `mosaic-${type}.svg`; a.click();
+        };
+
+        downloadPng.onclick = () => {
+            const a = document.createElement('a');
+            a.download = 'mosaic-preview.png';
+            a.href = canvas.toDataURL();
+            a.click();
+        };
+    </script>
+</body>
+</html>
