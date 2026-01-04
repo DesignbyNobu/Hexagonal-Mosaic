@@ -30,7 +30,6 @@
             border: 1px solid #171717;
             box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);
         }
-        /* Custom styling for number inputs to match the theme */
         input[type="number"] {
             background: #171717;
             border: 1px solid #262626;
@@ -45,7 +44,6 @@
             border-color: #4f46e5;
             color: #f1f5f9;
         }
-        /* Remove arrows from number input */
         input::-webkit-outer-spin-button,
         input::-webkit-inner-spin-button {
             -webkit-appearance: none;
@@ -64,7 +62,6 @@
         </header>
 
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            <!-- Sidebar Controls -->
             <div class="lg:col-span-1 flex flex-col gap-5 controls-panel p-6 rounded-2xl shadow-2xl">
                 <div>
                     <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">1. Image Input</label>
@@ -143,7 +140,6 @@
                 </div>
             </div>
 
-            <!-- Main Preview Area -->
             <div class="lg:col-span-3 flex flex-col items-center justify-center main-preview-area rounded-2xl p-6 overflow-hidden min-h-[550px] relative">
                 <div id="placeholderText" class="text-slate-600 text-center z-10">
                     <div class="w-20 h-20 bg-neutral-900 rounded-full flex items-center justify-center mx-auto mb-4 border border-neutral-800">
@@ -155,7 +151,6 @@
                     <p class="text-sm opacity-40 mt-1">Upload a photo to start the mosaic process</p>
                 </div>
                 
-                <!-- Loading indicator overlay -->
                 <div id="loader" class="absolute inset-0 bg-black/80 flex items-center justify-center z-20 hidden">
                     <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
                 </div>
@@ -212,31 +207,23 @@
             reader.readAsDataURL(file);
         });
 
-        // Sync Slider -> Input
         Object.keys(controls).forEach(key => {
             controls[key].addEventListener('input', () => {
-                if (inputs[key]) {
-                    inputs[key].value = controls[key].value;
-                }
+                if (inputs[key]) inputs[key].value = controls[key].value;
                 triggerRender();
             });
         });
 
-        // Sync Input -> Slider
         Object.keys(inputs).forEach(key => {
             inputs[key].addEventListener('input', () => {
-                if (controls[key]) {
-                    controls[key].value = inputs[key].value;
-                }
+                if (controls[key]) controls[key].value = inputs[key].value;
                 triggerRender();
             });
         });
 
         function triggerRender() {
             if (!isRendering && originalImage) {
-                requestAnimationFrame(() => {
-                    render();
-                });
+                requestAnimationFrame(() => render());
             }
         }
 
@@ -269,7 +256,6 @@
             if (brightness !== 0 || contrast !== 0) {
                 [r, g, b] = applyAdjustments(r, g, b, brightness, contrast);
             }
-
             return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
         }
 
@@ -322,20 +308,16 @@
                     for (let c = 0; c < cols; c++) {
                         const x = c * radius;
                         const y = r * h;
-                        const isEvenCol = c % 2 === 0;
-                        const isEvenRow = r % 2 === 0;
-                        
                         let pts = [];
                         let cx, cy;
 
-                        if ((isEvenRow && isEvenCol) || (!isEvenRow && !isEvenCol)) {
+                        if ((r % 2 === 0 && c % 2 === 0) || (r % 2 !== 0 && c % 2 !== 0)) {
                             pts = [[x, y + h], [x + radius, y], [x + radius * 2, y + h]];
                             cx = x + radius; cy = y + h * 0.66;
                         } else {
                             pts = [[x, y], [x + radius * 2, y], [x + radius, y + h]];
                             cx = x + radius; cy = y + h * 0.33;
                         }
-
                         const color = getPixelColor(imgData, cx, cy, canvas.width, canvas.height, brightness, contrast);
                         drawPolygon(ctx, pts, color, padding);
                     }
@@ -357,10 +339,11 @@
         }
 
         function drawPolygon(context, points, color, padding) {
+            let finalPoints = points;
             if (padding > 0) {
                 const cx = (points[0][0] + points[1][0] + points[2][0]) / 3;
                 const cy = (points[0][1] + points[1][1] + points[2][1]) / 3;
-                points = points.map(p => {
+                finalPoints = points.map(p => {
                     const dx = p[0] - cx;
                     const dy = p[1] - cy;
                     const dist = Math.sqrt(dx*dx + dy*dy);
@@ -369,8 +352,8 @@
                 });
             }
             context.beginPath();
-            context.moveTo(points[0][0], points[0][1]);
-            for (let i = 1; i < points.length; i++) context.lineTo(points[i][0], points[i][1]);
+            context.moveTo(finalPoints[0][0], finalPoints[0][1]);
+            for (let i = 1; i < finalPoints.length; i++) context.lineTo(finalPoints[i][0], finalPoints[i][1]);
             context.closePath();
             context.fillStyle = color;
             context.fill();
@@ -427,23 +410,28 @@
                             const y = r * triH;
                             let pts = [];
                             let cx, cy;
+                            
+                            // Aligning logic exactly with render()
                             if ((r % 2 === 0 && c % 2 === 0) || (r % 2 !== 0 && c % 2 !== 0)) {
                                 pts = [[x, y + triH], [x + radius, y], [x + radius * 2, y + triH]];
                                 cx = x + radius; cy = y + triH * 0.66;
                             } else {
-                                pts = [[x, y], [x + radius * 2, y], [x + radius, y + h]];
+                                pts = [[x, y], [x + radius * 2, y], [x + radius, y + triH]];
                                 cx = x + radius; cy = y + triH * 0.33;
                             }
+                            
                             const color = getPixelColor(imgData, cx, cy, w, h, brightness, contrast);
+                            
+                            let finalPts = pts;
                             if (padding > 0) {
-                                pts = pts.map(p => {
+                                finalPts = pts.map(p => {
                                     const dx = p[0] - cx; const dy = p[1] - cy;
                                     const dist = Math.sqrt(dx*dx + dy*dy);
                                     const ratio = Math.max(0, dist - padding) / dist;
                                     return [cx + dx * ratio, cy + dy * ratio];
                                 });
                             }
-                            const ptsStr = pts.map(p => p[0].toFixed(2) + ',' + p[1].toFixed(2)).join(' ');
+                            const ptsStr = finalPts.map(p => p[0].toFixed(2) + ',' + p[1].toFixed(2)).join(' ');
                             svg += `<polygon points="${ptsStr}" fill="${color}" />`;
                         }
                     }
